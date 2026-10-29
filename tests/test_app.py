@@ -1,0 +1,44 @@
+
+import unittest
+import app
+
+
+class TestLibrary(unittest.TestCase):
+    def setUp(self):
+        app.books.clear()
+        app.next_id = 1
+
+    def test_add_book(self):
+        book = app.add_book("Python Basics", "John Smith")
+
+        self.assertEqual(book["id"], 1)
+        self.assertEqual(book["title"], "Python Basics")
+        self.assertEqual(book["author"], "John Smith")
+        self.assertTrue(book["available"])
+
+    def test_view_available_books(self):
+        app.add_book("Python Basics", "John Smith")
+        app.add_book("Operating Systems", "Jane Doe")
+
+        books = app.get_available_books()
+
+        self.assertEqual(len(books), 2)
+        self.assertEqual(books[0]["title"], "Python Basics")
+
+    def test_unique_book_ids(self):
+        first = app.add_book("Book One", "Author One")
+        second = app.add_book("Book Two", "Author Two")
+
+        self.assertNotEqual(first["id"], second["id"])
+
+    def test_empty_title_is_rejected(self):
+        with self.assertRaises(ValueError):
+            app.add_book("", "John Smith")
+
+    def test_empty_author_is_rejected(self):
+        with self.assertRaises(ValueError):
+            app.add_book("Python Basics", "")
+
+
+if __name__ == "__main__":
+    unittest.main()
