@@ -33,6 +33,37 @@ def get_available_books():
     return [book for book in books if book["available"]]
 
 
+def get_all_books():
+    return list(books)
+
+
+def find_book(book_id):
+    for book in books:
+        if book["id"] == book_id:
+            return book
+    raise ValueError("Book not found.")
+
+
+def issue_book(book_id):
+    book = find_book(book_id)
+
+    if not book["available"]:
+        raise ValueError("This book is already issued.")
+
+    book["available"] = False
+    return book
+
+
+def return_book(book_id):
+    book = find_book(book_id)
+
+    if book["available"]:
+        raise ValueError("This book has not been issued.")
+
+    book["available"] = True
+    return book
+
+
 class LibraryHandler(BaseHTTPRequestHandler):
     def respond(self, status, body, content_type="text/html; charset=utf-8"):
         data = body.encode("utf-8")
@@ -59,19 +90,48 @@ class LibraryHandler(BaseHTTPRequestHandler):
             )
             return
 
-        rows = ""
-        for book in get_available_books():
-            rows += (
-                "<tr>"
-                f"<td>{book['id']}</td>"
-                f"<td>{escape(book['title'])}</td>"
-                f"<td>{escape(book['author'])}</td>"
-                "<td>Available</td>"
-                "</tr>"
+        if self.path == "/api/books/all":
+            self.respond(
+                200,
+                json.dumps(get_all_books()),
+                "application/json",
             )
+            return
+
+        rows = ""
+
+        for book in get_all_books():
+            book_id = book["id"]
+            title = escape(book["title"])
+            author = escape(book["author"])
+
+            if book["available"]:
+                status = "Available"
+                action = f"""
+                    <form action="/books/{book_id}/issue" method="post">
+                        <button type="submit">Issue Book</button>
+                    </form>
+                """
+            else:
+                status = "Issued"
+                action = f"""
+                    <form action="/books/{book_id}/return" method="post">
+                        <button type="submit">Return Book</button>
+                    </form>
+                """
+
+            rows += f"""
+                <tr>
+                    <td>{book_id}</td>
+                    <td>{title}</td>
+                    <td>{author}</td>
+                    <td>{status}</td>
+                    <td>{action}</td>
+                </tr>
+            """
 
         if not rows:
-            rows = '<tr><td colspan="4">No available books.</td></tr>'
+            rows = '<tr><td colspan="5">No books in the library.</td></tr>'
 
         page = f"""<!DOCTYPE html>
 <html lang="en">
@@ -82,7 +142,7 @@ class LibraryHandler(BaseHTTPRequestHandler):
     <style>
         body {{
             font-family: Arial, sans-serif;
-            max-width: 850px;
+            max-width: 1000px;
             margin: 40px auto;
             padding: 0 16px;
             background: #f5f7fb;
@@ -103,6 +163,7 @@ class LibraryHandler(BaseHTTPRequestHandler):
             background: #23395d;
             color: white;
             border: 0;
+            border-radius: 4px;
             cursor: pointer;
         }}
         table {{
@@ -116,18 +177,19 @@ class LibraryHandler(BaseHTTPRequestHandler):
             text-align: left;
         }}
         th {{ background: #e7edf7; }}
+        td form {{
+            padding: 0;
+            margin: 0;
+        }}
     </style>
 </head>
 <body>
     <h1>Library Book Management</h1>
-    <p>Push 1: Add and view available books</p>
+    <p>Push 2: Book issue, return, and availability management</p>
 
     <section class="panel">
-        <h2>Menu</h2>
-        <p>1. Add Book</p>
-        <p>2. View Available Books</p>
+        <h2>Add a Book</h2>
         <form action="/books" method="post">
-            <h2>Add a Book</h2>
             <input name="title" placeholder="Book title" required>
             <br>
             <input name="author" placeholder="Author name" required>
@@ -137,13 +199,14 @@ class LibraryHandler(BaseHTTPRequestHandler):
     </section>
 
     <section>
-        <h2>Available Books</h2>
+        <h2>Book Inventory</h2>
         <table>
             <tr>
                 <th>ID</th>
                 <th>Title</th>
                 <th>Author</th>
                 <th>Status</th>
+                <th>Action</th>
             </tr>
             {rows}
         </table>
@@ -155,31 +218,46 @@ class LibraryHandler(BaseHTTPRequestHandler):
         self.respond(200, page)
 
     def do_POST(self):
-        if self.path != "/books":
-            self.respond(404, "Not found")
-            return
-
         try:
-            length = int(self.headers.get("Content-Length", "0"))
-            if length > 10000:
-                self.respond(413, "Form submission too large.")
-                return
+            if self.path == "/books":
+                length = int(self.headers.get("Content-Length", "0"))
 
-            form_data = self.rfile.read(length).decode("utf-8")
-            form = parse_qs(form_data)
+                if length > 10000:
+                    self.respond(413, "Form submission too large.")
+                    return
 
-            title = form.get("title", [""])[0]
-            author = form.get("author", [""])[0]
+                form_data = self.rfile.read(length).decode("utf-8")
+                form = parse_qs(form_data)
 
-            add_book(title, author)
+                title = form.get("title", [""])[0]
+                author = form.get("author", [""])[0]
+
+                add_book(title, author)
+
+            else:
+                parts = self.path.strip("/").split("/")
+
+                if (
+                    len(parts) != 3
+                    or parts[0] != "books"
+                    or parts[2] not in ("issue", "return")
+                ):
+                    self.respond(404, "Not found")
+                    return
+
+                book_id = int(parts[1])
+
+                if parts[2] == "issue":
+                    issue_book(book_id)
+                else:
+                    return_book(book_id)
 
             self.send_response(303)
             self.send_header("Location", "/")
             self.end_headers()
 
         except (ValueError, UnicodeDecodeError):
-            self.respond(400, "Invalid book details.")
-
+            self.respond(400, "Invalid request or book operation.")
 
 if __name__ == "__main__":
     server = ThreadingHTTPServer(("0.0.0.0", 8080), LibraryHandler)

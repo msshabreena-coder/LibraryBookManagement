@@ -39,6 +39,47 @@ class TestLibrary(unittest.TestCase):
         with self.assertRaises(ValueError):
             app.add_book("Python Basics", "")
 
+    def test_issue_book(self):
+        book = app.add_book("Python Basics", "John Smith")
+
+        issued = app.issue_book(book["id"])
+
+        self.assertFalse(issued["available"])
+        self.assertEqual(len(app.get_available_books()), 0)
+
+    def test_cannot_issue_book_twice(self):
+        book = app.add_book("Python Basics", "John Smith")
+        app.issue_book(book["id"])
+
+        with self.assertRaises(ValueError):
+            app.issue_book(book["id"])
+
+    def test_return_book(self):
+        book = app.add_book("Python Basics", "John Smith")
+        app.issue_book(book["id"])
+
+        returned = app.return_book(book["id"])
+
+        self.assertTrue(returned["available"])
+        self.assertEqual(len(app.get_available_books()), 1)
+
+    def test_cannot_return_available_book(self):
+        book = app.add_book("Python Basics", "John Smith")
+
+        with self.assertRaises(ValueError):
+            app.return_book(book["id"])
+
+    def test_book_not_found(self):
+        with self.assertRaises(ValueError):
+            app.issue_book(999)
+
+    def test_get_all_books_includes_issued_books(self):
+        book = app.add_book("Python Basics", "John Smith")
+        app.issue_book(book["id"])
+
+        self.assertEqual(len(app.get_all_books()), 1)
+        self.assertEqual(len(app.get_available_books()), 0)
+
 
 if __name__ == "__main__":
     unittest.main()
