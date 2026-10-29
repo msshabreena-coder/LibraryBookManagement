@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: library-book-management
-          image: SHABBU2007/library-book-management:v1
+          image: Shabbu2007/library-book-management:v1
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
